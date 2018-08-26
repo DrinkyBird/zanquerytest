@@ -31,12 +31,16 @@ const SQF_ALL_DMFLAGS = 0x08000000;
 const SQF_SECURITY_SETTINGS = 0x10000000;
 const SQF_OPTIONAL_WADS = 0x20000000;
 const SQF_DEH = 0x40000000;
-const SQF_PWAD_HASHES = 0x80000000;
+const SQF_EXTENDED_INFO = 0x80000000;
+
+const SQF2_PWAD_HASHES = 0x00000001;
 
 const SQF_ALL = ( SQF_NAME|SQF_URL|SQF_EMAIL|SQF_MAPNAME|SQF_MAXCLIENTS|SQF_MAXPLAYERS| 
     SQF_PWADS|SQF_GAMETYPE|SQF_GAMENAME|SQF_IWAD|SQF_FORCEPASSWORD|SQF_FORCEJOINPASSWORD|SQF_GAMESKILL| 
     SQF_BOTSKILL|SQF_LIMITS|SQF_TEAMDAMAGE|SQF_NUMPLAYERS|SQF_PLAYERDATA|SQF_TEAMINFO_NUMBER|SQF_TEAMINFO_NAME|SQF_TEAMINFO_COLOR|SQF_TEAMINFO_SCORE| 
-    SQF_TESTING_SERVER|SQF_ALL_DMFLAGS|SQF_SECURITY_SETTINGS|SQF_OPTIONAL_WADS|SQF_DEH|SQF_PWAD_HASHES );
+    SQF_TESTING_SERVER|SQF_ALL_DMFLAGS|SQF_SECURITY_SETTINGS|SQF_OPTIONAL_WADS|SQF_DEH|SQF_EXTENDED_INFO );
+
+const SQF2_ALL = ( SQF2_PWAD_HASHES );
 
 const SERVER_LAUNCHER_CHALLENGE = 5660023;
 const SERVER_LAUNCHER_IGNORING = 5660024;
@@ -298,14 +302,18 @@ function onMessage(msg, rinfo) {
         }
     }
 
-    if (flags & SQF_PWAD_HASHES) {
-        let numHashes = readByte();
-        let reserved = readByte();
+    if (flags & SQF_EXTENDED_INFO) {
+        let flags2 = readLong();
+        console.log('Flags2: %d', flags2.toString(16));
 
-        for (let i = 0; i < numHashes; i++) {
-            let hash = readString();
+        if (flags2 & SQF2_PWAD_HASHES) {
+            let numHashes = readByte();
+            console.log('%d hashes', numHashes);
+            for (let i = 0; i < numHashes; i++) {
+                let hash = readString();
 
-            wads[i]['hash'] = hash;
+                wads[i]['hash'] = hash;
+            }
         }
     }
 
@@ -372,10 +380,11 @@ function main(args) {
     encoder = huffman.create();
 
     let off = 0;
-    let buf = Buffer.alloc(13);
+    let buf = Buffer.alloc(16);
     off = buf.writeInt32LE(199, off);
     off = buf.writeInt32LE(SQF_ALL, off);
     off = buf.writeInt32LE(0, off);
+    off = buf.writeInt32LE(SQF2_ALL, off);
     let enc = encoder.encode(buf);
 
     socket.send(enc, port, host, (err) => {
