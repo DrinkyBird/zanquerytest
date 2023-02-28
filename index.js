@@ -1,5 +1,7 @@
 const dgram = require('dgram');
 const huffman = require('./huffman');
+const iso = require('iso-3166-1');
+const fs = require('fs');
 
 const SQF_NAME = 0x00000001;
 const SQF_URL = 0x00000002;
@@ -34,13 +36,16 @@ const SQF_DEH = 0x40000000;
 const SQF_EXTENDED_INFO = 0x80000000;
 
 const SQF2_PWAD_HASHES = 0x00000001;
+const SQF2_COUNTRY = 0x00000002;
+const SQF2_GAMEMODE_NAME = 0x4;
+const SQF2_GAMEMODE_SHORTNAME = 0x8;
 
 const SQF_ALL = ( SQF_NAME|SQF_URL|SQF_EMAIL|SQF_MAPNAME|SQF_MAXCLIENTS|SQF_MAXPLAYERS| 
     SQF_PWADS|SQF_GAMETYPE|SQF_GAMENAME|SQF_IWAD|SQF_FORCEPASSWORD|SQF_FORCEJOINPASSWORD|SQF_GAMESKILL| 
     SQF_BOTSKILL|SQF_LIMITS|SQF_TEAMDAMAGE|SQF_NUMPLAYERS|SQF_PLAYERDATA|SQF_TEAMINFO_NUMBER|SQF_TEAMINFO_NAME|SQF_TEAMINFO_COLOR|SQF_TEAMINFO_SCORE| 
     SQF_TESTING_SERVER|SQF_ALL_DMFLAGS|SQF_SECURITY_SETTINGS|SQF_OPTIONAL_WADS|SQF_DEH|SQF_EXTENDED_INFO );
 
-const SQF2_ALL = ( SQF2_PWAD_HASHES );
+const SQF2_ALL = ( SQF2_PWAD_HASHES|SQF2_COUNTRY|SQF2_GAMEMODE_NAME|SQF2_GAMEMODE_SHORTNAME );
 
 const SERVER_LAUNCHER_CHALLENGE = 5660023;
 const SERVER_LAUNCHER_IGNORING = 5660024;
@@ -50,6 +55,7 @@ let socket, host, port, encoder, readBuffer, readOffset;
 
 function onMessage(msg, rinfo) {
     let dec = encoder.decode(msg);
+    fs.writeFileSync("out_dehuff.bin", dec);
 
     console.log('Received %d byte response.', dec.length);
     console.log('');
@@ -84,7 +90,7 @@ function onMessage(msg, rinfo) {
     console.log('');
 
     let flags = readLong();
-    console.log('Return flags: ' + flags.toString(16));
+    console.log('Return flags: %s', flags.toString(16));
 
     let wads = [];
     let players = [];
@@ -304,16 +310,41 @@ function onMessage(msg, rinfo) {
 
     if (flags & SQF_EXTENDED_INFO) {
         let flags2 = readLong();
-        console.log('Flags2: %d', flags2.toString(16));
+        console.log('Return extended flags: %s', flags2.toString(16));
 
         if (flags2 & SQF2_PWAD_HASHES) {
             let numHashes = readByte();
-            console.log('%d hashes', numHashes);
+            console.log('%d PWAD hashes.', numHashes);
             for (let i = 0; i < numHashes; i++) {
                 let hash = readString();
 
                 wads[i]['hash'] = hash;
             }
+        }
+
+        if (flags2 & SQF2_COUNTRY) {
+            let code = 
+				String.fromCharCode(readByte()) +
+				String.fromCharCode(readByte()) +
+				String.fromCharCode(readByte());
+				
+			let cdata = iso.whereAlpha3(code);
+			let cname = 'Unknown';
+			
+			if (code == 'XIP') cname = 'Use IP geolocation';
+			else if (cdata) cname = cdata.country;
+				
+			console.log('Country: %s (%s)', code, cname);
+        }
+
+        if (flags2 & SQF2_GAMEMODE_NAME) {
+            const name = readString();
+            console.log("Game mode name: %s", name);
+        }
+
+        if (flags2 & SQF2_GAMEMODE_SHORTNAME) {
+            const shortName = readString();
+            console.log("Game mode short name: %s", shortName);
         }
     }
 

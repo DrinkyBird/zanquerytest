@@ -49,8 +49,6 @@ exports.huffmanFreqs = [
 	0.00317976, 0.00085346, 0.00101190, 0.00189849, 0.00105728, 0.00186824, 0.00092908, 0.00160896
 ];
 
-var buffertools = require('buffertools');
-
 var Huffman = function(freq) {
 	if (!(this instanceof arguments.callee)) {
 		throw new Error("Constructor called as a function");
@@ -201,20 +199,23 @@ Huffman.prototype.decode = function(data) {
 
 	// Repeatedly traverse the huffman tree turning the huffman code
 	// into the original byte.
-	var decoded = new buffertools.WritableBufferStream();
+	var decoded = null;
+	var pos = 0;
 	var node = this.tree;
 	for (var i = 0;i < bitString.length;i++) {
 		var bit = bitString.charAt(i);
 		if (bit in node) {
 			node = node[bit];
 		} else {
-			decoded.write(Buffer.from([node.asc]));
+			var b = Buffer.from([node.asc]);
+			if (decoded == null) { decoded = b; }
+			else { decoded = Buffer.concat([decoded, b]); }
 			node = this.tree[bit];
 		}
 	}
-	decoded.write(Buffer.from([node.asc]));
+	decoded = Buffer.concat([decoded, Buffer.from([node.asc])]);
 
-	return decoded.getBuffer();
+	return decoded;
 };
 
 exports.Huffman = Huffman;
